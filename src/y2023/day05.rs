@@ -1,459 +1,289 @@
-use crate::solver;
 use nom::character::complete::space1;
 use nom::IResult;
-use std::collections::HashMap;
+use crate::solver::Solver;
+use crate::utils::parsers::parse_number;
+
+#[derive(Debug)]
+struct MapRangeCombiner {
+    name: String,
+    mappers: Vec<MapRangeLayer>,
+}
+
+impl MapRangeCombiner {
+    fn evaluate_range(&self, range: &Range, map_index: usize) -> Vec<Range> {
+        // If there is nothing left to map to return yourself
+        if map_index >= self.mappers.len() {
+            return vec![*range];
+        }
+        let mut out = vec![];
+        if let Some(current_mapper) = self.mappers.get(map_index) {
+            // For the current mapper evaluate the range and return all the new values we found.
+            for new_mapped_range in current_mapper.evaluate_range(range).iter() {
+                out.extend(self.evaluate_range(new_mapped_range, map_index + 1));
+            }
+        }
+        out
+    }
+}
 
 pub struct Day5Solver {}
+
+fn parse_range_mapper(line: &str) -> IResult<&str, MapRange> {
+    let (line, dest_start) = parse_number(line)?;
+    let (line, _) = space1(line)?;
+    let (line, source_start) = parse_number(line)?;
+    let (line, _) = space1(line)?;
+    let (line, length) = parse_number(line)?;
+    Ok((
+        line,
+        MapRange::new(
+            source_start,
+            source_start + length - 1,
+            dest_start as isize - source_start as isize,
+        ),
+    ))
+}
+
+impl Solver for Day5Solver {
+    fn solve_part_1(&self, lines: Vec<String>) -> String {
+        let seeds = lines[0]
+            .split("seeds: ")
+            .collect::<Vec<_>>()
+            .get(1)
+            .unwrap()
+            .split(' ')
+            .collect::<Vec<_>>();
+        let lines = &lines[2..];
+        let mapper_info: Vec<&[String]> = lines.split(|line| line.is_empty()).collect::<Vec<_>>();
+        let mut mappers = vec![];
+        for mapper in mapper_info.iter() {
+            let mut name = "";
+            let mut maps = vec![];
+            for (idx, line) in mapper.iter().enumerate() {
+                if idx == 0 {
+                    name = line;
+                    continue;
+                }
+                let (_, map) = parse_range_mapper(line).unwrap();
+                maps.push(map);
+            }
+            // We've created all the number ranges. Collect them into a MapRangeLayer.
+            mappers.push(MapRangeLayer::from_ranges(name.into(), maps));
+        }
+        let evaluator = MapRangeCombiner { name: "winner".to_string(), mappers };
+
+        let mut min_seed_value = usize::MAX;
+
+        for seed in seeds {
+            // Create ranges that have a single element and find the min out of all of them.
+            let val = seed.parse::<usize>().unwrap();
+            let seed_ranges = vec![Range::new(val, val)];
+            for seed_range in seed_ranges {
+                let values = evaluator.evaluate_range(&seed_range, 0);
+                for val in values {
+                    if val.start < min_seed_value {
+                        min_seed_value = val.start;
+                    }
+                }
+            }
+        }
+        min_seed_value.to_string()
+    }
+
+    fn solve_part_2(&self, lines: Vec<String>) -> String {
+        let seeds = lines[0]
+            .split("seeds: ")
+            .collect::<Vec<_>>()
+            .get(1)
+            .unwrap()
+            .split(' ')
+            .collect::<Vec<_>>();
+        let lines = &lines[2..];
+        let mapper_info: Vec<&[String]> = lines.split(|line| line.is_empty()).collect::<Vec<_>>();
+        let mut mappers = vec![];
+        for mapper in mapper_info.iter() {
+            let mut name = "";
+            let mut maps = vec![];
+            for (idx, line) in mapper.iter().enumerate() {
+                if idx == 0 {
+                    name = line;
+                    continue;
+                }
+                let (_, map) = parse_range_mapper(line).unwrap();
+                maps.push(map);
+            }
+            // We've created all the number ranges. Collect them into a MapRangeLayer.
+            mappers.push(MapRangeLayer::from_ranges(name.into(), maps));
+        }
+        let evaluator = MapRangeCombiner { name: "winner".to_string(),  mappers,  };
+
+        let seed_ranges = seeds.chunks(2).map(|chunk| {
+            let seed_start = chunk[0].parse::<usize>().unwrap();
+            let seed_range = chunk[1].parse::<usize>().unwrap();
+            Range::new(seed_start, seed_start + seed_range - 1)
+        }).collect::<Vec<Range>>();
+
+        find_min_location_for_seed_range(seed_ranges, &evaluator).to_string()
+    }
+}
+
+fn find_min_location_for_seed_range(seed_ranges: Vec<Range>, evaluator: &MapRangeCombiner) -> usize {
+    let mut min_seed_value = usize::MAX;
+    for seed_range in seed_ranges {
+        for val in evaluator.evaluate_range(&seed_range, 0) {
+            if val.start < min_seed_value {
+                min_seed_value = val.start;
+            }
+        }
+    }
+    min_seed_value
+}
+
+#[cfg(test)]
+mod tests_mind {
+    use crate::y2023::day05::*;
+
+    #[test]
+    fn test_seed_ranges_min_location() {
+        let seed_ranges = vec![Range::new(1, 10)];
+        let map_range_combiner = MapRangeCombiner {
+            mappers: vec![
+                MapRangeLayer::from_ranges(
+                    "".to_string(),
+                    vec![
+                        MapRange::new(1, 5, 5),
+                        MapRange::new(6, 10, -4),
+                    ],
+                ),
+                MapRangeLayer::from_ranges(
+                    "".to_string(),
+                    vec![
+                        MapRange::new(1, 3, 7),
+                        MapRange::new(4, 6, -3),
+                        MapRange::new(7, 10, -3),
+                    ],
+                ),
+            ],
+            name: "winner".to_string(),
+        };
+        assert_eq!(find_min_location_for_seed_range(seed_ranges, &map_range_combiner), 1);
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 struct Range {
     // Both start and end are inclusive
     start: usize,
     end: usize,
-    delta: isize,
 }
+
 impl Range {
-    fn new(start: usize, end: usize, delta: isize) -> Self {
-        Range { start, end, delta }
+    fn new(start: usize, end: usize) -> Self {
+        Range { start, end }
+    }
+    fn overlaps(&self, other: &Self) -> bool {
+        self.contains(other.start) || self.contains(other.end) || other.contains(self.start) || other.contains(self.end)
     }
 
     fn contains(&self, val: usize) -> bool {
         self.start <= val && val <= self.end
     }
 
+    fn intersect(&self, other: &Self) -> Option<Self> {
+        if !self.overlaps(other) {
+            return None;
+        }
+
+        // Since they overlap their overlap must be the max of the starts and the min of the ends
+        Some(Self::new(std::cmp::max(self.start, other.start), std::cmp::min(self.end, other.end)))
+    }
+
+    fn shift(&self, delta: isize) -> Range {
+        Range::new((self.start as isize + delta) as usize, (self.end as isize + delta) as usize)
+    }
+
     // split_on should only be called if the value is contained in the range
     // and does not match the endpoints.
-    fn split_on(&self, val: usize) -> (Range, Range) {
+    fn split_on(&self, val: usize) -> (Self, Self) {
         if val <= self.start || self.end <= val {
             panic!("cannot split_on if the value is not in the range and not the endpoints");
         }
-        let first = Range::new(self.start, val - 1, self.delta);
-        let second = Range::new(val, self.end, self.delta);
-        (first, second)
+        (Self::new(self.start, val - 1), Self::new(val, self.end))
     }
 }
 
-/*
-struct NumberLine {
-ranges: Vec<Range>,
+#[derive(Debug, Copy, Clone, PartialEq)]
+struct MapRange {
+    range: Range,
+    delta: isize,
 }
 
-impl NumberLine {
-fn new() -> Self {
-    NumberLine {
-        ranges: vec![Range::new(0, usize::MAX, 0)],
+impl MapRange {
+    fn new(start: usize, end: usize, delta: isize) -> Self {
+        MapRange { range: Range::new(start, end), delta }
     }
-}
-fn add_range(&mut self, new_range: Range) {
-    // First, find all the ranges that currently overlap with the new range. That means that
-    // you find the first range that contains the start, the range that contains the end, and
-    // all the ones in between.
-    let mut overlapping_ranges = vec![];
-    let mut add_ranges = false;
-    let mut first_idx = 0;
-    let mut last_idx = 0;
-    for (idx, r) in self.ranges.iter().enumerate() {
-        // If we are in the middle of adding something just add it
-        if add_ranges {
-            overlapping_ranges.push(r);
-            // Otherwise check if we should add for the first time
-        } else if r.contains(new_range.start) {
-            first_idx = idx;
-            // Add this as the starting one.
-            overlapping_ranges.push(r);
-            // If this also contains the end then exit early
-            add_ranges = true;
+
+    fn evaluate_range(&self, range: &Range) -> (Vec<Range>, Option<Range>) {
+        let mut out = vec![];
+        if let Some(intersection) = self.range.intersect(range) {
+            // The part of the range that is to the left of the intersection maps to itself
+            if range.start != intersection.start {
+                out.push(Range::new(range.start, intersection.start - 1));
+            }
+            // Take the intersection and shift by delta
+            out.push(intersection.shift(self.delta));
+            // Return what it mapped to
+            let remaining = (intersection.end == range.end).then_some(Range::new(intersection.end + 1, range.end));
+            return (out, remaining);
         }
-
-        // If this also contains the end make a note and exit
-        if r.contains(new_range.end) {
-            last_idx = idx;
-            break;
-        }
+        (out, Some(*range))
     }
-        // TODO: Only add ranges if they are the same length
-    // +------+-----+-----+----------+
-    //   +-------------------+
-    // +-+----+-----+-----+--+-------+
-    // We only have to potentially split the first and the last ranges. The ones in between
-    // don't need to be split.
-    if overlapping_ranges.len() == 1 {
-        let mut range = *overlapping_ranges[0];
+}
+
+#[derive(Debug)]
+struct MapRangeLayer {
+    name: String,
+    // A MapRangeLayer is a collection of non-overlapping MapRangeLayers. This can be interpreted
+    // as a piece-wise function F(x) = {x + A if x in [a, b], x + B if x in [c, d], ...}
+    ranges: Vec<MapRange>,
+}
+
+impl MapRangeLayer {
+    /// mapped_ranges returns the ranges that the given range maps to. Note that this may be
+    /// one or more, since the MapRangeLayer has piece-wise functions and the initial range may be
+    /// split.
+    fn evaluate_range(&self, range: &Range) -> Vec<Range> {
+        let mut out = vec![];
+        let mut remaining = *range;
+        for r in self.ranges.iter() {
+            let (intersection, not_intersected) = r.evaluate_range(&remaining);
+            // We are no longer in the range that has intersected. Exit early
+            out.extend(intersection);
+            if not_intersected.is_none() {
+                break;
+            }
+            remaining = not_intersected.unwrap();
+        }
+        out
+    }
+    fn from_ranges(name: String, ranges: Vec<MapRange>) -> Self {
         let mut new_ranges = vec![];
-        if range.start < new_range.start {
-            let (first, mut second) = range.split_on(new_range.start);
-            new_ranges.push(first);
-            range = second;
-        }
-        if
-        let (first, mut second) = range.split_on(new_range.start);
-    }
+        // Sort ranges by start asc
+        let mut ranges = ranges;
+        ranges.sort_by(|a, b| a.range.start.cmp(&b.range.start));
 
-    let mut new_ranges = vec![];
-    for (idx, r) in overlapping_ranges.iter().enumerate() {
-        if idx == 0 && r.start < new_range.start {
-            let (first, mut second) = r.split_on(new_range.start);
-            new_ranges.push(first);
-            second.delta += new_range.delta;
-            new_ranges.push(second);
-            continue;
-        }
-
-        if idx == overlapping_ranges.len() - 1 && new_range.end < r.end {
-            let (mut first, second) = r.split_on(new_range.end + 1);
-            first.delta += new_range.delta;
-            new_ranges.push(first);
-            new_ranges.push(second);
-            continue;
-        }
-
-        new_ranges.push(Range::new(r.start, r.end, r.delta + new_range.delta));
-    }
-
-    self.ranges.splice(first_idx..=last_idx, new_ranges);
-}
-}
-
-#[cfg(test)]
-mod number_line_tests {
-use crate::y2023::day05::{NumberLine, Range};
-
-#[test]
-fn test_adding_one_range() {
-    let mut number_line = NumberLine::new();
-    number_line.add_range(Range::new(10, 20, 10));
-
-    let ranges = number_line.ranges;
-    assert_eq!(ranges[0], Range::new(0, 9, 0));
-    assert_eq!(ranges[1], Range::new(10, 20, 10));
-    assert_eq!(ranges[2], Range::new(21, usize::MAX, 0));
-}
-
-#[test]
-fn test_adding_two_non_overlapping_range() {
-    let mut number_line = NumberLine::new();
-    number_line.add_range(Range::new(10, 20, 10));
-    number_line.add_range(Range::new(30, 50, 5));
-
-    let ranges = number_line.ranges;
-    assert_eq!(ranges[0], Range::new(0, 9, 0));
-    assert_eq!(ranges[1], Range::new(10, 20, 10));
-    assert_eq!(ranges[2], Range::new(21, 29, 0));
-    assert_eq!(ranges[3], Range::new(30, 50, 5));
-    assert_eq!(ranges[4], Range::new(51, usize::MAX, 0));
-}
-
-#[test]
-fn test_adding_two_overlapping_range() {
-    let mut number_line = NumberLine::new();
-    number_line.add_range(Range::new(10, 20, 10));
-    number_line.add_range(Range::new(15, 25, 5));
-
-    let ranges = number_line.ranges;
-    assert_eq!(ranges[0], Range::new(0, 9, 0));
-    assert_eq!(ranges[1], Range::new(10, 14, 10));
-    assert_eq!(ranges[2], Range::new(15, 20, 15));
-    assert_eq!(ranges[3], Range::new(21, 25, 5));
-    assert_eq!(ranges[4], Range::new(26, usize::MAX, 0));
-}
-}
-
-impl solver::Solver for Day5Solver {
-fn solve_part_1(&self, lines: Vec<String>) -> String {
-    let seeds = lines[0]
-        .split("seeds: ")
-        .collect::<Vec<_>>()
-        .get(1)
-        .unwrap()
-        .split(" ")
-        .collect::<Vec<_>>();
-    let lines = &lines[2..];
-    let mapper_info: Vec<&[String]> = lines.split(|line| line.is_empty()).collect::<Vec<_>>();
-    let mut mappers = vec![];
-    for mapper in mapper_info.iter() {
-        let mut name = "";
-        let mut maps = vec![];
-        for (idx, line) in mapper.iter().enumerate() {
-            if idx == 0 {
-                name = line;
-                continue;
+        let mut start_index = 0;
+        for range in ranges {
+            if start_index < range.range.start {
+                new_ranges.push(MapRange::new(start_index, range.range.start - 1, 0));
             }
-            let (_, map) = parse_range_mapper(line).unwrap();
-            maps.push(map);
+            new_ranges.push(range);
+            start_index = range.range.end + 1;
         }
-        mappers.push(CombinedRangeMapper::new(name.to_string(), maps));
-    }
-    println!("Seeds: {:?}", seeds);
-    println!("{:?}", mappers);
-
-    let mut min_seed_value = usize::MAX;
-
-    for seed in seeds {
-        let mut val = seed.parse::<usize>().unwrap();
-        println!("Will evalute seed {}", seed);
-        for map in mappers.iter_mut() {
-            println!("{:?}", map);
-            let new_val = map.map(val);
-            println!("{} maps to {} in mapper {}", val, new_val, map.name.clone());
-            val = new_val;
-        }
-        println!("Seed {} maps to {}", seed, val);
-        if val < min_seed_value {
-            min_seed_value = val;
-        }
-    }
-    min_seed_value.to_string()
-}
-
-fn solve_part_2(&self, lines: Vec<String>) -> String {
-    let seeds = lines[0]
-        .split("seeds: ")
-        .collect::<Vec<_>>()
-        .get(1)
-        .unwrap()
-        .split(" ")
-        .collect::<Vec<_>>();
-    let lines = &lines[2..];
-    let mapper_info: Vec<&[String]> = lines.split(|line| line.is_empty()).collect::<Vec<_>>();
-    let mut mappers = vec![];
-    for mapper in mapper_info.iter() {
-        let mut name = "";
-        let mut maps = vec![];
-        for (idx, line) in mapper.iter().enumerate() {
-            if idx == 0 {
-                name = line;
-                continue;
-            }
-            let (_, map) = parse_range_mapper(line).unwrap();
-            maps.push(map);
-        }
-        mappers.push(CombinedRangeMapper::new(name.to_string(), maps));
-    }
-    println!("Seeds: {:?}", seeds);
-    println!("{:?}", mappers);
-
-    let mut min_seed_value = usize::MAX;
-
-    for seed_range in seeds.chunks(2) {
-        let start = seed_range[0].parse::<usize>().unwrap();
-        let end = start + seed_range[1].parse::<usize>().unwrap();
-        for seed in start..end {
-            let mut val = seed;
-            // println!("Will evalute seed {}", seed);
-            for map in mappers.iter_mut() {
-                let new_val = map.map(val);
-                //  println!("{} maps to {} in mapper {}", val, new_val, map.name.clone());
-                val = new_val;
-            }
-            //println!("Seed {} maps to {}", seed, val);
-            if val < min_seed_value {
-                min_seed_value = val;
-            }
-        }
-    }
-    min_seed_value.to_string()
-}
-}
-
-fn parse_range_mapper(line: &str) -> IResult<&str, RangeMapper> {
-let (line, dest_start) = parse_number(line)?;
-let (line, _) = space1(line)?;
-let (line, source_start) = parse_number(line)?;
-let (line, _) = space1(line)?;
-let (line, length) = parse_number(line)?;
-Ok((
-    line,
-    RangeMapper {
-        source_start,
-        dest_start,
-        length,
-    },
-))
-}
-
-#[derive(Debug)]
-struct CombinedRangeMapper {
-name: String,
-mappers: Vec<RangeMapper>,
-
-cache: HashMap<usize, usize>,
-}
-
-impl CombinedRangeMapper {
-// map iterates over all mappers. If any of them contain the value they will map it, otherwise
-// it will return the original value.
-fn map(&mut self, source_val: usize) -> usize {
-    /*
-    if let Some(cached_val) = self.cache.get(&source_val) {
-        return *cached_val;
-    }
-    jjjjjjjjj
-     */
-    if self.cache.contains_key(&source_val) {
-        return self.cache.get(&source_val).unwrap().clone();
-    }
-    for map in self.mappers.iter() {
-        // At this point we have passed any mapper that would've have picked it up
-        if source_val < map.source_start {
-            self.cache.insert(source_val, source_val);
-            return source_val;
-        }
-        // The maps are sorted by order. This means that we will not find any more mappers.
-        if source_val >= map.source_start + map.length {
-            continue;
-        }
-        //            if map.in_range(source_val) {
-        let out = map.map(source_val);
-        self.cache.insert(source_val, out);
-        return out;
-        //
-        // }
-    }
-    source_val
-}
-
-fn new(name: String, mappers: Vec<RangeMapper>) -> Self {
-    // Sort mappers by their source start, where the smaller source start comes first
-    let mut mappers = mappers;
-    mappers.sort_by(|a, b| a.source_start.cmp(&b.source_start));
-    CombinedRangeMapper {
-        name,
-        mappers,
-        cache: HashMap::new(),
+        // Add the last range that goes to Inf. This is allowed because we
+        // don't expect the caller to set it to inf.
+        new_ranges.push(MapRange::new(start_index, usize::MAX, 0));
+        Self { name, ranges: new_ranges }
     }
 }
-}
 
-#[derive(Debug)]
-struct RangeMapper {
-source_start: usize,
-dest_start: usize,
-length: usize,
-}
-
-impl RangeMapper {
-fn map(&self, source_val: usize) -> usize {
-    if source_val < self.source_start || source_val >= self.source_start + self.length {
-        return source_val;
-    }
-    let offset = source_val - self.source_start;
-    self.dest_start + offset
-}
-
-fn in_range(&self, source_val: usize) -> bool {
-    source_val >= self.source_start && source_val < self.source_start + self.length
-}
-}
-
-#[cfg(test)]
-mod tests {
-use crate::solver::Solver;
-use crate::utils::lines::lines_from_file;
-
-use super::*;
-
-#[test]
-fn test_part_1_unit() {
-    let solver = Day5Solver {};
-    let lines = [
-        "seeds: 79 14 55 13",
-        "",
-        "seed-to-soil map:",
-        "50 98 2",
-        "52 50 48",
-        "",
-        "soil-to-fertilizer map:",
-        "0 15 37",
-        "37 52 2",
-        "39 0 15",
-        "",
-        "fertilizer-to-water map:",
-        "49 53 8",
-        "0 11 42",
-        "42 0 7",
-        "57 7 4",
-        "",
-        "water-to-light map:",
-        "88 18 7",
-        "18 25 70",
-        "",
-        "light-to-temperature map:",
-        "45 77 23",
-        "81 45 19",
-        "68 64 13",
-        "",
-        "temperature-to-humidity map:",
-        "0 69 1",
-        "1 0 69",
-        "",
-        "humidity-to-location map:",
-        "60 56 37",
-        "56 93 4",
-    ]
-    .iter()
-    .map(|s| s.to_string())
-    .collect();
-    assert_eq!(solver.solve_part_1(lines), "35");
-}
-
-#[test]
-fn test_part_1() {
-    let solver = Day5Solver {};
-    let lines = lines_from_file("./inputs/day05.txt");
-    assert_eq!(solver.solve_part_1(lines), "551761867");
-}
-
-#[test]
-fn test_part_2_unit() {
-    let solver = Day5Solver {};
-    let lines = [
-        "seeds: 79 14 55 13",
-        "",
-        "seed-to-soil map:",
-        "50 98 2",
-        "52 50 48",
-        "",
-        "soil-to-fertilizer map:",
-        "0 15 37",
-        "37 52 2",
-        "39 0 15",
-        "",
-        "fertilizer-to-water map:",
-        "49 53 8",
-        "0 11 42",
-        "42 0 7",
-        "57 7 4",
-        "",
-        "water-to-light map:",
-        "88 18 7",
-        "18 25 70",
-        "",
-        "light-to-temperature map:",
-        "45 77 23",
-        "81 45 19",
-        "68 64 13",
-        "",
-        "temperature-to-humidity map:",
-        "0 69 1",
-        "1 0 69",
-        "",
-        "humidity-to-location map:",
-        "60 56 37",
-        "56 93 4",
-    ]
-    .iter()
-    .map(|s| s.to_string())
-    .collect();
-    assert_eq!(solver.solve_part_2(lines), "46");
-}
-
-#[test]
-fn test_part_2() {
-    let solver = Day5Solver {};
-    let lines = lines_from_file("./inputs/day05.txt");
-    assert_eq!(solver.solve_part_2(lines), "551761867");
-}
-}
-
-
- */

@@ -1,3 +1,5 @@
+extern crate core;
+
 use std::env;
 
 mod utils;
@@ -30,6 +32,7 @@ fn get_solver(year: usize, day: u8) -> Option<Box<dyn solver::Solver>> {
                 2 => Some(Box::new(y2023::day02::Day2Solver {})),
                 3 => Some(Box::new(y2023::day03::Day3Solver {})),
                 4 => Some(Box::new(y2023::day04::Day4Solver {})),
+                5 => Some(Box::new(y2023::day05::Day5Solver {})),
                 _ => None,
             }
         }

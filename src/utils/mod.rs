@@ -1,2 +1,2 @@
 pub mod lines;
-mod parsers;
+pub mod parsers;
