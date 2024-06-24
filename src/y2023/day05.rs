@@ -1,48 +1,9 @@
-use nom::character::complete::space1;
-use nom::IResult;
 use crate::solver::Solver;
 use crate::utils::parsers::parse_number;
-
-#[derive(Debug)]
-struct MapRangeCombiner {
-    name: String,
-    mappers: Vec<MapRangeLayer>,
-}
-
-impl MapRangeCombiner {
-    fn evaluate_range(&self, range: &Range, map_index: usize) -> Vec<Range> {
-        // If there is nothing left to map to return yourself
-        if map_index >= self.mappers.len() {
-            return vec![*range];
-        }
-        let mut out = vec![];
-        if let Some(current_mapper) = self.mappers.get(map_index) {
-            // For the current mapper evaluate the range and return all the new values we found.
-            for new_mapped_range in current_mapper.evaluate_range(range).iter() {
-                out.extend(self.evaluate_range(new_mapped_range, map_index + 1));
-            }
-        }
-        out
-    }
-}
+use nom::character::complete::space1;
+use nom::IResult;
 
 pub struct Day5Solver {}
-
-fn parse_range_mapper(line: &str) -> IResult<&str, MapRange> {
-    let (line, dest_start) = parse_number(line)?;
-    let (line, _) = space1(line)?;
-    let (line, source_start) = parse_number(line)?;
-    let (line, _) = space1(line)?;
-    let (line, length) = parse_number(line)?;
-    Ok((
-        line,
-        MapRange::new(
-            source_start,
-            source_start + length - 1,
-            dest_start as isize - source_start as isize,
-        ),
-    ))
-}
 
 impl Solver for Day5Solver {
     fn solve_part_1(&self, lines: Vec<String>) -> String {
@@ -70,20 +31,20 @@ impl Solver for Day5Solver {
             // We've created all the number ranges. Collect them into a MapRangeLayer.
             mappers.push(MapRangeLayer::from_ranges(name.into(), maps));
         }
-        let evaluator = MapRangeCombiner { name: "winner".to_string(), mappers };
+        let evaluator = MapRangeCombiner {
+            name: "winner".to_string(),
+            mappers,
+        };
 
         let mut min_seed_value = usize::MAX;
 
         for seed in seeds {
             // Create ranges that have a single element and find the min out of all of them.
             let val = seed.parse::<usize>().unwrap();
-            let seed_ranges = vec![Range::new(val, val)];
-            for seed_range in seed_ranges {
-                let values = evaluator.evaluate_range(&seed_range, 0);
-                for val in values {
-                    if val.start < min_seed_value {
-                        min_seed_value = val.start;
-                    }
+            let values = evaluator.evaluate_range(&Range::new(val, val), 0);
+            for val in values {
+                if val.start < min_seed_value {
+                    min_seed_value = val.start;
                 }
             }
         }
@@ -115,19 +76,28 @@ impl Solver for Day5Solver {
             // We've created all the number ranges. Collect them into a MapRangeLayer.
             mappers.push(MapRangeLayer::from_ranges(name.into(), maps));
         }
-        let evaluator = MapRangeCombiner { name: "winner".to_string(),  mappers,  };
+        let evaluator = MapRangeCombiner {
+            name: "winner".to_string(),
+            mappers,
+        };
 
-        let seed_ranges = seeds.chunks(2).map(|chunk| {
-            let seed_start = chunk[0].parse::<usize>().unwrap();
-            let seed_range = chunk[1].parse::<usize>().unwrap();
-            Range::new(seed_start, seed_start + seed_range - 1)
-        }).collect::<Vec<Range>>();
+        let seed_ranges = seeds
+            .chunks(2)
+            .map(|chunk| {
+                let seed_start = chunk[0].parse::<usize>().unwrap();
+                let seed_range = chunk[1].parse::<usize>().unwrap();
+                Range::new(seed_start, seed_start + seed_range - 1)
+            })
+            .collect::<Vec<Range>>();
 
         find_min_location_for_seed_range(seed_ranges, &evaluator).to_string()
     }
 }
 
-fn find_min_location_for_seed_range(seed_ranges: Vec<Range>, evaluator: &MapRangeCombiner) -> usize {
+fn find_min_location_for_seed_range(
+    seed_ranges: Vec<Range>,
+    evaluator: &MapRangeCombiner,
+) -> usize {
     let mut min_seed_value = usize::MAX;
     for seed_range in seed_ranges {
         for val in evaluator.evaluate_range(&seed_range, 0) {
@@ -141,6 +111,7 @@ fn find_min_location_for_seed_range(seed_ranges: Vec<Range>, evaluator: &MapRang
 
 #[cfg(test)]
 mod tests_mind {
+    use crate::utils::lines::lines_from_file;
     use crate::y2023::day05::*;
 
     #[test]
@@ -150,10 +121,7 @@ mod tests_mind {
             mappers: vec![
                 MapRangeLayer::from_ranges(
                     "".to_string(),
-                    vec![
-                        MapRange::new(1, 5, 5),
-                        MapRange::new(6, 10, -4),
-                    ],
+                    vec![MapRange::new(1, 5, 5), MapRange::new(6, 10, -4)],
                 ),
                 MapRangeLayer::from_ranges(
                     "".to_string(),
@@ -166,7 +134,26 @@ mod tests_mind {
             ],
             name: "winner".to_string(),
         };
-        assert_eq!(find_min_location_for_seed_range(seed_ranges, &map_range_combiner), 1);
+        assert_eq!(
+            find_min_location_for_seed_range(seed_ranges, &map_range_combiner),
+            1
+        );
+    }
+
+    #[test]
+    fn test_part_1() {
+        let solver = Day5Solver {};
+        let lines = lines_from_file("inputs/2023-day05.txt");
+        let result = solver.solve_part_1(lines);
+        assert_eq!(result, "551761867");
+    }
+
+    #[test]
+    fn test_part_2() {
+        let solver = Day5Solver {};
+        let lines = lines_from_file("inputs/2023-day05.txt");
+        let result = solver.solve_part_2(lines);
+        assert_eq!(result, "57451709");
     }
 }
 
@@ -182,7 +169,10 @@ impl Range {
         Range { start, end }
     }
     fn overlaps(&self, other: &Self) -> bool {
-        self.contains(other.start) || self.contains(other.end) || other.contains(self.start) || other.contains(self.end)
+        self.contains(other.start)
+            || self.contains(other.end)
+            || other.contains(self.start)
+            || other.contains(self.end)
     }
 
     fn contains(&self, val: usize) -> bool {
@@ -195,20 +185,17 @@ impl Range {
         }
 
         // Since they overlap their overlap must be the max of the starts and the min of the ends
-        Some(Self::new(std::cmp::max(self.start, other.start), std::cmp::min(self.end, other.end)))
+        Some(Self::new(
+            std::cmp::max(self.start, other.start),
+            std::cmp::min(self.end, other.end),
+        ))
     }
 
     fn shift(&self, delta: isize) -> Range {
-        Range::new((self.start as isize + delta) as usize, (self.end as isize + delta) as usize)
-    }
-
-    // split_on should only be called if the value is contained in the range
-    // and does not match the endpoints.
-    fn split_on(&self, val: usize) -> (Self, Self) {
-        if val <= self.start || self.end <= val {
-            panic!("cannot split_on if the value is not in the range and not the endpoints");
-        }
-        (Self::new(self.start, val - 1), Self::new(val, self.end))
+        Range::new(
+            (self.start as isize + delta) as usize,
+            (self.end as isize + delta) as usize,
+        )
     }
 }
 
@@ -220,7 +207,10 @@ struct MapRange {
 
 impl MapRange {
     fn new(start: usize, end: usize, delta: isize) -> Self {
-        MapRange { range: Range::new(start, end), delta }
+        MapRange {
+            range: Range::new(start, end),
+            delta,
+        }
     }
 
     fn evaluate_range(&self, range: &Range) -> (Vec<Range>, Option<Range>) {
@@ -233,11 +223,28 @@ impl MapRange {
             // Take the intersection and shift by delta
             out.push(intersection.shift(self.delta));
             // Return what it mapped to
-            let remaining = (intersection.end == range.end).then_some(Range::new(intersection.end + 1, range.end));
+            let remaining = (intersection.end != range.end)
+                .then_some(Range::new(intersection.end + 1, range.end));
             return (out, remaining);
         }
         (out, Some(*range))
     }
+}
+
+fn parse_range_mapper(line: &str) -> IResult<&str, MapRange> {
+    let (line, dest_start) = parse_number(line)?;
+    let (line, _) = space1(line)?;
+    let (line, source_start) = parse_number(line)?;
+    let (line, _) = space1(line)?;
+    let (line, length) = parse_number(line)?;
+    Ok((
+        line,
+        MapRange::new(
+            source_start,
+            source_start + length - 1,
+            dest_start as isize - source_start as isize,
+        ),
+    ))
 }
 
 #[derive(Debug)]
@@ -283,7 +290,32 @@ impl MapRangeLayer {
         // Add the last range that goes to Inf. This is allowed because we
         // don't expect the caller to set it to inf.
         new_ranges.push(MapRange::new(start_index, usize::MAX, 0));
-        Self { name, ranges: new_ranges }
+        Self {
+            name,
+            ranges: new_ranges,
+        }
     }
 }
 
+#[derive(Debug)]
+struct MapRangeCombiner {
+    name: String,
+    mappers: Vec<MapRangeLayer>,
+}
+
+impl MapRangeCombiner {
+    fn evaluate_range(&self, range: &Range, map_index: usize) -> Vec<Range> {
+        // If there are no more mappers the range maps to itself
+        if map_index >= self.mappers.len() {
+            return vec![*range];
+        }
+        let mut out = vec![];
+        if let Some(current_mapper) = self.mappers.get(map_index) {
+            // For the current mapper evaluate the range and return all the new values we found.
+            for new_mapped_range in current_mapper.evaluate_range(range).iter() {
+                out.extend(self.evaluate_range(new_mapped_range, map_index + 1));
+            }
+        }
+        out
+    }
+}
