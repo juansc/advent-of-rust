@@ -34,6 +34,7 @@ fn get_solver(year: usize, day: u8) -> Option<Box<dyn solver::Solver>> {
                 4 => Some(Box::new(y2023::day04::Day4Solver {})),
                 5 => Some(Box::new(y2023::day05::Day5Solver {})),
                 6 => Some(Box::new(y2023::day06::Day6Solver {})),
+                7 => Some(Box::new(y2023::day07::Day7Solver {})),
                 _ => None,
             }
         }
