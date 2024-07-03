@@ -2,6 +2,8 @@ use crate::solver::Solver;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::iter::zip;
+use crate::y2023::day07::CardRank::Joker;
+use crate::y2023::day07::RuleSet::{Simple, WithJokers};
 
 pub struct Day7Solver {}
 
@@ -10,7 +12,7 @@ impl Solver for Day7Solver {
         let mut hands = vec![];
         for line in lines {
             let parts = line.split(' ').collect::<Vec<_>>();
-            let poker_hand = CamelPokerHand::new(parts[0].to_string());
+            let poker_hand = CamelPokerHand::new_with_rules(parts[0].to_string(), Simple);
             let bid = parts[1].parse::<usize>().unwrap();
             hands.push(CamelPokerRound {
                 hand: poker_hand,
@@ -19,7 +21,6 @@ impl Solver for Day7Solver {
         }
 
         hands.sort_by(|a, b| a.hand.cmp(&b.hand));
-        hands.reverse();
         let mut out = 0;
         for (mult, hand) in hands.iter().enumerate() {
             out += (mult + 1) * hand.bid;
@@ -28,13 +29,30 @@ impl Solver for Day7Solver {
     }
 
     fn solve_part_2(&self, lines: Vec<String>) -> String {
-        todo!()
+        let mut hands = vec![];
+        for line in lines {
+            let parts = line.split(' ').collect::<Vec<_>>();
+            let poker_hand = CamelPokerHand::new_with_rules(parts[0].to_string(), WithJokers);
+            let bid = parts[1].parse::<usize>().unwrap();
+            hands.push(CamelPokerRound {
+                hand: poker_hand,
+                bid,
+            });
+        }
+
+        hands.sort_by(|a, b| a.hand.cmp(&b.hand));
+        let mut out = 0;
+        for (mult, hand) in hands.iter().enumerate() {
+            out += (mult + 1) * hand.bid;
+        }
+        out.to_string()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::solver::Solver;
+    use crate::utils::lines::lines_from_file;
     use crate::y2023::day07::{CamelPokerHand, Day7Solver};
 
     #[test]
@@ -92,6 +110,35 @@ mod tests {
         let solver = Day7Solver {};
         assert_eq!(solver.solve_part_1(lines), "6440");
     }
+
+    #[test]
+    fn test_part_2_partial() {
+        let lines = vec![
+            "32T3K 765".to_string(),
+            "T55J5 684".to_string(),
+            "KK677 28".to_string(),
+            "KTJJT 220".to_string(),
+            "QQQJA 483 ".to_string(),
+        ];
+        let solver = Day7Solver {};
+        assert_eq!(solver.solve_part_2(lines), "5905");
+    }
+
+    #[test]
+    fn test_part_1() {
+        let solver = Day7Solver {};
+        let lines = lines_from_file("inputs/2023-day07.txt");
+        let result = solver.solve_part_1(lines);
+        assert_eq!(result, "241344943");
+    }
+
+    #[test]
+    fn test_part_2() {
+        let solver = Day7Solver {};
+        let lines = lines_from_file("inputs/2023-day07.txt");
+        let result = solver.solve_part_2(lines);
+        assert_eq!(result, "243101568");
+    }
 }
 
 #[derive(Eq, PartialEq, PartialOrd, Debug)]
@@ -107,6 +154,7 @@ enum PokerLevel {
 
 #[derive(Eq, PartialEq, PartialOrd, Debug, Copy, Clone)]
 enum CardRank {
+    Joker,
     Two,
     Three,
     Four,
@@ -122,9 +170,13 @@ enum CardRank {
     Ace,
 }
 
-impl From<String> for CardRank {
-    fn from(value: String) -> Self {
+impl CardRank {
+    fn parse_rank(value: String, rule_set: RuleSet) -> Self {
         match value.as_str() {
+            "J" => match rule_set {
+                RuleSet::Simple => Self::Jack,
+                RuleSet::WithJokers => Self::Joker,
+            },
             "2" => Self::Two,
             "3" => Self::Three,
             "4" => Self::Four,
@@ -134,7 +186,6 @@ impl From<String> for CardRank {
             "8" => Self::Eight,
             "9" => Self::Nine,
             "T" => Self::Ten,
-            "J" => Self::Jack,
             "Q" => Self::Queen,
             "K" => Self::King,
             "A" => Self::Ace,
@@ -150,8 +201,13 @@ struct CamelPokerHand {
     level: PokerLevel,
 }
 
+enum RuleSet {
+    Simple,
+    WithJokers,
+}
+
 impl CamelPokerHand {
-    fn new(hand: String) -> Self {
+    fn new_with_jokers(hand: String) -> Self {
         if hand.len() != 5 {
             panic!("poker hand must have 5 cards, found {}", hand.len())
         }
@@ -161,7 +217,50 @@ impl CamelPokerHand {
         for card in hand.chars() {
             let card_count = freq.entry(card).or_default();
             *card_count += 1;
-            cards.push(CardRank::from(card.to_string()));
+            cards.push(CardRank::parse_rank(card.to_string(), WithJokers));
+        }
+
+        let num_jokers =  freq.remove(&'J').unwrap_or_default();
+
+        if num_jokers == 5 {
+            return Self{hand: cards, level: PokerLevel::FiveOfAKind}
+        }
+
+        let mut values = freq.values().collect::<Vec<_>>();
+        values.sort();
+        values.reverse();
+
+        let top_card = *values[0] + num_jokers;
+
+        let level = if top_card == 5 {
+            PokerLevel::FiveOfAKind
+        } else if top_card == 4 {
+            PokerLevel::FourOfAKind
+        } else if top_card == 3 && *values[1] == 2 {
+            PokerLevel::FullHouse
+        } else if top_card == 3 && *values[1] == 1 {
+            PokerLevel::ThreeOfAKind
+        } else if top_card == 2 && *values[1] == 2 {
+            PokerLevel::TwoPair
+        } else if top_card == 2 && *values[1] == 1 {
+            PokerLevel::OnePair
+        } else {
+            PokerLevel::HighCard
+        };
+
+        Self { hand: cards, level }
+    }
+    fn new_simple(hand: String) -> Self {
+        if hand.len() != 5 {
+            panic!("poker hand must have 5 cards, found {}", hand.len())
+        }
+        let mut freq: HashMap<char, u8> = HashMap::new();
+
+        let mut cards = vec![];
+        for card in hand.chars() {
+            let card_count = freq.entry(card).or_default();
+            *card_count += 1;
+            cards.push(CardRank::parse_rank(card.to_string(), Simple));
         }
 
         let mut values = freq.values().collect::<Vec<_>>();
@@ -185,6 +284,17 @@ impl CamelPokerHand {
         };
 
         Self { hand: cards, level }
+    }
+
+    fn new_with_rules(hand: String, rule_set: RuleSet) -> Self {
+        match rule_set {
+            RuleSet::Simple => Self::new_simple(hand),
+            RuleSet::WithJokers => Self::new_with_jokers(hand),
+        }
+    }
+
+    fn new(hand: String) -> Self {
+        Self::new_simple(hand)
     }
 }
 
