@@ -23,7 +23,7 @@ impl Schema {
         let mut adjacent_points = Vec::with_capacity(8);
 
         for part in part_candidates.iter() {
-            if part.is_adjacent_to(&location) {
+            if part.is_adjacent_to(location) {
                 adjacent_points.push(*part);
             }
         }
@@ -149,7 +149,7 @@ impl Part {
         // +•••••+
         // +++++++
         let min_x = self.location.x - 1;
-        // Looks stupid but I want to capture that the end of the segment is
+        // Looks stupid, but I want to capture that the end of the segment is
         // self.location.0 + self.width - 1, and then we move to the right by one.
         let max_x = (self.location.x + self.width as isize - 1) + 1;
         let min_y = self.location.y - 1;

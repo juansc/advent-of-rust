@@ -18,23 +18,18 @@ impl Solver for Day5Solver {
         let mapper_info: Vec<&[String]> = lines.split(|line| line.is_empty()).collect::<Vec<_>>();
         let mut mappers = vec![];
         for mapper in mapper_info.iter() {
-            let mut name = "";
             let mut maps = vec![];
             for (idx, line) in mapper.iter().enumerate() {
                 if idx == 0 {
-                    name = line;
                     continue;
                 }
                 let (_, map) = parse_range_mapper(line).unwrap();
                 maps.push(map);
             }
             // We've created all the number ranges. Collect them into a MapRangeLayer.
-            mappers.push(MapRangeLayer::from_ranges(name.into(), maps));
+            mappers.push(MapRangeLayer::from_ranges(maps));
         }
-        let evaluator = MapRangeCombiner {
-            name: "winner".to_string(),
-            mappers,
-        };
+        let evaluator = MapRangeCombiner { mappers };
 
         let mut min_seed_value = usize::MAX;
 
@@ -63,23 +58,18 @@ impl Solver for Day5Solver {
         let mapper_info: Vec<&[String]> = lines.split(|line| line.is_empty()).collect::<Vec<_>>();
         let mut mappers = vec![];
         for mapper in mapper_info.iter() {
-            let mut name = "";
             let mut maps = vec![];
             for (idx, line) in mapper.iter().enumerate() {
                 if idx == 0 {
-                    name = line;
                     continue;
                 }
                 let (_, map) = parse_range_mapper(line).unwrap();
                 maps.push(map);
             }
             // We've created all the number ranges. Collect them into a MapRangeLayer.
-            mappers.push(MapRangeLayer::from_ranges(name.into(), maps));
+            mappers.push(MapRangeLayer::from_ranges(maps));
         }
-        let evaluator = MapRangeCombiner {
-            name: "winner".to_string(),
-            mappers,
-        };
+        let evaluator = MapRangeCombiner { mappers };
 
         let seed_ranges = seeds
             .chunks(2)
@@ -119,20 +109,13 @@ mod tests_mind {
         let seed_ranges = vec![Range::new(1, 10)];
         let map_range_combiner = MapRangeCombiner {
             mappers: vec![
-                MapRangeLayer::from_ranges(
-                    "".to_string(),
-                    vec![MapRange::new(1, 5, 5), MapRange::new(6, 10, -4)],
-                ),
-                MapRangeLayer::from_ranges(
-                    "".to_string(),
-                    vec![
-                        MapRange::new(1, 3, 7),
-                        MapRange::new(4, 6, -3),
-                        MapRange::new(7, 10, -3),
-                    ],
-                ),
+                MapRangeLayer::from_ranges(vec![MapRange::new(1, 5, 5), MapRange::new(6, 10, -4)]),
+                MapRangeLayer::from_ranges(vec![
+                    MapRange::new(1, 3, 7),
+                    MapRange::new(4, 6, -3),
+                    MapRange::new(7, 10, -3),
+                ]),
             ],
-            name: "winner".to_string(),
         };
         assert_eq!(
             find_min_location_for_seed_range(seed_ranges, &map_range_combiner),
@@ -249,7 +232,6 @@ fn parse_range_mapper(line: &str) -> IResult<&str, MapRange> {
 
 #[derive(Debug)]
 struct MapRangeLayer {
-    name: String,
     // A MapRangeLayer is a collection of non-overlapping MapRangeLayers. This can be interpreted
     // as a piece-wise function F(x) = {x + A if x in [a, b], x + B if x in [c, d], ...}
     ranges: Vec<MapRange>,
@@ -273,7 +255,7 @@ impl MapRangeLayer {
         }
         out
     }
-    fn from_ranges(name: String, ranges: Vec<MapRange>) -> Self {
+    fn from_ranges(ranges: Vec<MapRange>) -> Self {
         let mut new_ranges = vec![];
         // Sort ranges by start asc
         let mut ranges = ranges;
@@ -290,16 +272,12 @@ impl MapRangeLayer {
         // Add the last range that goes to Inf. This is allowed because we
         // don't expect the caller to set it to inf.
         new_ranges.push(MapRange::new(start_index, usize::MAX, 0));
-        Self {
-            name,
-            ranges: new_ranges,
-        }
+        Self { ranges: new_ranges }
     }
 }
 
 #[derive(Debug)]
 struct MapRangeCombiner {
-    name: String,
     mappers: Vec<MapRangeLayer>,
 }
 

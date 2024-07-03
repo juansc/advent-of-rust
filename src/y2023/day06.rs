@@ -29,20 +29,20 @@ impl Solver for Day6Solver {
         let mut product = 1;
         for race in race_info {
             let strat = LinearSpeedStrategy {
-                race_info: race.clone(),
+                race_info: race,
             };
             product *= strat.winning_charge_durations().len();
         }
         product.to_string()
     }
 
-    fn solve_part_2(&self, lines: Vec<String>) -> String {
+    fn solve_part_2(&self, _: Vec<String>) -> String {
         // Not bothering to parse
         let race_info = RaceInfo {
             race_duration_in_seconds: 61677571,
             distance_to_beat: 430103613071150,
         };
-        LinearSpeedStrategy{race_info: race_info}.winning_charge_durations().len().to_string()
+        LinearSpeedStrategy{race_info}.winning_charge_durations().len().to_string()
     }
 }
 

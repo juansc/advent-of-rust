@@ -2,7 +2,6 @@ use crate::solver::Solver;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::iter::zip;
-use crate::y2023::day07::CardRank::Joker;
 use crate::y2023::day07::RuleSet::{Simple, WithJokers};
 
 pub struct Day7Solver {}
@@ -288,8 +287,8 @@ impl CamelPokerHand {
 
     fn new_with_rules(hand: String, rule_set: RuleSet) -> Self {
         match rule_set {
-            RuleSet::Simple => Self::new_simple(hand),
-            RuleSet::WithJokers => Self::new_with_jokers(hand),
+            Simple => Self::new_simple(hand),
+            WithJokers => Self::new_with_jokers(hand),
         }
     }
 

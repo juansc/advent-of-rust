@@ -25,12 +25,12 @@ impl solver::Solver for Day4Solver {
         for (idx, line) in lines.iter().enumerate() {
             // By the time we've gotten to this card we have a certain number of cards we need to resolve
             let num_copies_of_card = cards_to_process[idx];
-            let (_, card) = parse_card(&line).unwrap();
+            let (_, card) = parse_card(line).unwrap();
             let points = card.num_matches();
             for i in 0..points {
                 // We get a copy for each match, but we have to multiply it by the number of copies
                 // we had by the time we got to this card
-                cards_to_process[card.number + i] += 1 * num_copies_of_card;
+                cards_to_process[card.number + i] += num_copies_of_card;
             }
         }
         cards_to_process.iter().sum::<isize>().to_string()
